@@ -5,39 +5,36 @@ from PySide6.QtWidgets import (
     QPushButton, QListWidget, QListWidgetItem,
     QLabel, QInputDialog, QMessageBox
 )
-from PySide6.QtCore import Qt, QObject, Signal
+from PySide6.QtCore import QObject, Signal
 from pynput import keyboard
 from pynput.keyboard import GlobalHotKeys
 
 from macro_runner import MacroRunner
+from settings_dialog import SettingsDialog
 
 CONFIG_FILE = "config.json"
 
 
-# ---------- Qt-safe signal ----------
 class KeySignal(QObject):
     captured = Signal(str)
 
 
-# ---------- Row widget ----------
 class MacroRow(QWidget):
     def __init__(self, entry, edit_callback):
         super().__init__()
         self.entry = entry
-        self.edit_callback = edit_callback
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 2, 6, 2)
 
         self.label = QLabel()
-        self.edit_btn = QPushButton("✏️")
-        self.edit_btn.setFixedWidth(34)
-
-        self.edit_btn.clicked.connect(self.edit_callback)
+        edit_btn = QPushButton("✏️")
+        edit_btn.setFixedWidth(34)
+        edit_btn.clicked.connect(edit_callback)
 
         layout.addWidget(self.label)
         layout.addStretch()
-        layout.addWidget(self.edit_btn)
+        layout.addWidget(edit_btn)
 
         self.refresh()
 
@@ -49,12 +46,11 @@ class MacroRow(QWidget):
         )
 
 
-# ---------- Main app ----------
 class MacroApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Macro Editor")
-        self.resize(520, 380)
+        self.resize(540, 400)
 
         # ---------- Styling ----------
         self.setStyleSheet("""
@@ -93,28 +89,44 @@ class MacroApp(QWidget):
         self.list_widget = QListWidget()
         self.list_widget.setDragDropMode(QListWidget.InternalMove)
 
-        btns = QHBoxLayout()
+        buttons = QHBoxLayout()
         self.add_btn = QPushButton("Add")
-        self.start_btn = QPushButton("Start (F5)")
-        self.stop_btn = QPushButton("Stop (F6)")
+        self.settings_btn = QPushButton("Settings")
+        self.start_btn = QPushButton()
+        self.stop_btn = QPushButton()
 
-        btns.addWidget(self.add_btn)
-        btns.addStretch()
-        btns.addWidget(self.start_btn)
-        btns.addWidget(self.stop_btn)
+        buttons.addWidget(self.add_btn)
+        buttons.addWidget(self.settings_btn)
+        buttons.addStretch()
+        buttons.addWidget(self.start_btn)
+        buttons.addWidget(self.stop_btn)
 
         layout.addWidget(self.list_widget)
-        layout.addLayout(btns)
+        layout.addLayout(buttons)
 
         # ---------- Connections ----------
         self.add_btn.clicked.connect(self.add_key)
+        self.settings_btn.clicked.connect(self.open_settings)
         self.start_btn.clicked.connect(self.start_macro)
         self.stop_btn.clicked.connect(self.stop_macro)
 
         self.load_config()
+        self.update_button_labels()
         self.setup_hotkeys()
 
-    # ---------- Hotkeys ----------
+    # ---------- Settings ----------
+    def open_settings(self):
+        dialog = SettingsDialog(self.start_key, self.stop_key)
+        if dialog.exec():
+            self.start_key, self.stop_key = dialog.get_keys()
+            self.update_button_labels()
+            self.setup_hotkeys()
+            self.save_config()
+
+    def update_button_labels(self):
+        self.start_btn.setText(f"Start ({self.start_key.upper()})")
+        self.stop_btn.setText(f"Stop ({self.stop_key.upper()})")
+
     def setup_hotkeys(self):
         try:
             self.hotkeys.stop()
@@ -153,15 +165,18 @@ class MacroApp(QWidget):
             return
 
         repeat, ok = QInputDialog.getInt(
-            self, "Repeat",
-            "-1 = loop until stopped",
+            self, "Repeat (-1 = loop forever)",
+            "-1 = loop forever",
             -1, -1, 9999
         )
         if not ok:
             return
 
-        entry = {"key": key, "delay": delay, "repeat": repeat}
-        self.macros.append(entry)
+        self.macros.append({
+            "key": key,
+            "delay": delay,
+            "repeat": repeat
+        })
         self.refresh_list()
         self.save_config()
 
@@ -194,7 +209,7 @@ class MacroApp(QWidget):
     def stop_macro(self):
         self.runner.stop()
 
-    # ---------- UI refresh ----------
+    # ---------- UI ----------
     def refresh_list(self):
         self.list_widget.clear()
         for entry in self.macros:
@@ -203,7 +218,10 @@ class MacroApp(QWidget):
                 entry,
                 lambda e=entry, r=None: self.edit_entry(e, r)
             )
-            row.edit_callback = lambda e=entry, r=row: self.edit_entry(e, r)
+            row_callback = lambda e=entry, r=row: self.edit_entry(e, r)
+            row.layout().itemAt(2).widget().clicked.disconnect()
+            row.layout().itemAt(2).widget().clicked.connect(row_callback)
+
             item.setSizeHint(row.sizeHint())
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, row)
