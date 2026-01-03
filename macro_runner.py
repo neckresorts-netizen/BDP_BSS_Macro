@@ -35,17 +35,16 @@ class MacroRunner:
                 repeat = entry.get("repeat", -1)
 
                 if repeat < 0:
-                    # Loop forever until stopped
+                    # Loop forever
                     while self.running:
+                        time.sleep(delay)   # ⬅ delay BEFORE press
                         self.press_key(key)
-                        time.sleep(delay)
                 else:
-                    # Finite repeat
                     for _ in range(repeat):
                         if not self.running:
                             return
+                        time.sleep(delay)   # ⬅ delay BEFORE press
                         self.press_key(key)
-                        time.sleep(delay)
 
     def press_key(self, key):
         try:
