@@ -1,27 +1,62 @@
 import time
-from pynput.keyboard import Controller as KeyboardController
+import threading
+from pynput.keyboard import Controller, Key
 
-keyboard = KeyboardController()
+keyboard = Controller()
+
+
+def normalize_key(key):
+    if len(key) == 1:
+        return key
+    try:
+        return getattr(Key, key)
+    except AttributeError:
+        return None
+
 
 class MacroRunner:
     def __init__(self):
         self.running = False
-        self.macro = []
+        self.thread = None
 
-    def set_macro(self, macro):
-        self.macro = macro
+    def start(self, macro):
+        if self.running or not macro:
+            return
 
-    def start(self):
         self.running = True
-        while self.running:
-            for entry in self.macro:
-                if not self.running:
+
+        def run():
+            while self.running:
+                for entry in macro:
+                    if not self.running:
+                        break
+
+                    key = normalize_key(entry["key"])
+                    delay = entry["delay"]
+                    repeat = entry.get("repeat", -1)
+
+                    if key is None:
+                        continue
+
+                    count = repeat if repeat > 0 else float("inf")
+
+                    for _ in range(int(count)):
+                        if not self.running:
+                            break
+
+                        try:
+                            keyboard.press(key)
+                            keyboard.release(key)
+                        except Exception:
+                            pass
+
+                        time.sleep(delay)
+
+                if not any(e.get("repeat", -1) < 0 for e in macro):
                     break
-                key = entry["key"]
-                delay = entry["delay"] / 1000
-                keyboard.press(key)
-                keyboard.release(key)
-                time.sleep(delay)
+
+        self.thread = threading.Thread(target=run, daemon=True)
+        self.thread.start()
 
     def stop(self):
         self.running = False
