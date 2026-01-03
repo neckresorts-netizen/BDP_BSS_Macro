@@ -154,7 +154,7 @@ class MacroApp(QWidget):
 
         repeat, ok = QInputDialog.getInt(
             self, "Repeat",
-            "-1 = loop forever",
+            "-1 = loop until stopped",
             -1, -1, 9999
         )
         if not ok:
