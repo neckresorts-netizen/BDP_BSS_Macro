@@ -17,6 +17,9 @@ class MacroRunner:
         self.threads = []
 
         for entry in macros:
+            if not entry.get("enabled", True):
+                continue  # skip disabled macros
+
             t = threading.Thread(
                 target=self.run_single_macro,
                 args=(entry,),
