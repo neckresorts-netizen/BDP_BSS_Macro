@@ -3,7 +3,7 @@ import threading
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QListWidget, QListWidgetItem,
-    QLabel, QInputDialog, QMessageBox
+    QLabel, QInputDialog, QMessageBox, QCheckBox
 )
 from PySide6.QtCore import QObject, Signal
 from pynput import keyboard
@@ -20,46 +20,57 @@ class KeySignal(QObject):
 
 
 class MacroRow(QWidget):
-    def __init__(self, entry):
+    def __init__(self, entry, on_toggle):
         super().__init__()
         self.entry = entry
+        self.on_toggle = on_toggle
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 2, 6, 2)
 
-        self.left = QLabel(entry["key"])
-        self.center = QLabel(entry["name"])
-        self.right = QLabel()
+        self.checkbox = QCheckBox()
+        self.checkbox.setChecked(entry.get("enabled", True))
+        self.checkbox.stateChanged.connect(self.toggle_enabled)
+
+        self.key_label = QLabel(entry["key"])
+        self.name_label = QLabel(entry["name"])
+        self.info_label = QLabel()
 
         self.edit_btn = QPushButton("✏️")
         self.edit_btn.setFixedWidth(34)
 
-        layout.addWidget(self.left)
-        layout.addWidget(self.center, 1)
-        layout.addWidget(self.right)
+        layout.addWidget(self.checkbox)
+        layout.addWidget(self.key_label)
+        layout.addWidget(self.name_label, 1)
+        layout.addWidget(self.info_label)
         layout.addWidget(self.edit_btn)
 
         self.refresh()
 
+    def toggle_enabled(self):
+        self.entry["enabled"] = self.checkbox.isChecked()
+        self.on_toggle()
+
     def refresh(self):
         repeat = self.entry.get("repeat", -1)
         rep = "Loop" if repeat < 0 else f"x{repeat}"
-        self.left.setText(self.entry["key"])
-        self.center.setText(self.entry["name"])
-        self.right.setText(f'{self.entry["delay"]}s | {rep}')
+        self.key_label.setText(self.entry["key"])
+        self.name_label.setText(self.entry["name"])
+        self.info_label.setText(f'{self.entry["delay"]}s | {rep}')
 
 
 class MacroApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Macro Editor")
-        self.resize(620, 420)
+        self.resize(640, 440)
 
         self.setStyleSheet("""
         QWidget { background:#1e1e1e; color:white; font-size:14px; }
         QPushButton { background:#3a3a3a; border-radius:6px; padding:8px; }
         QPushButton:hover { background:#505050; }
         QListWidget { background:#2a2a2a; border-radius:6px; }
+        QCheckBox { padding-right:6px; }
         """)
 
         self.macros = []
@@ -131,7 +142,13 @@ class MacroApp(QWidget):
         name, key = data
 
         delay, ok = QInputDialog.getDouble(
-            self, "Delay", "Seconds:", 0.5, 0, 60, 2
+            self,
+            "Delay",
+            "Seconds (max 1800 = 30 minutes):",
+            1.0,
+            0,
+            1800,
+            2
         )
         if not ok:
             return
@@ -146,7 +163,8 @@ class MacroApp(QWidget):
             "name": name,
             "key": key,
             "delay": delay,
-            "repeat": repeat
+            "repeat": repeat,
+            "enabled": True
         })
         self.refresh_list()
         self.save_config()
@@ -160,7 +178,13 @@ class MacroApp(QWidget):
             return
 
         delay, ok = QInputDialog.getDouble(
-            self, "Edit Delay", "Seconds:", entry["delay"], 0, 60, 2
+            self,
+            "Edit Delay",
+            "Seconds (max 1800):",
+            entry["delay"],
+            0,
+            1800,
+            2
         )
         if not ok:
             return
@@ -198,7 +222,7 @@ class MacroApp(QWidget):
         self.list_widget.clear()
         for entry in self.macros:
             item = QListWidgetItem()
-            row = MacroRow(entry)
+            row = MacroRow(entry, self.save_config)
             row.edit_btn.clicked.connect(lambda _, e=entry: self.edit_entry(e))
             item.setSizeHint(row.sizeHint())
             self.list_widget.addItem(item)
