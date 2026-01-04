@@ -110,6 +110,15 @@ class MacroApp(QWidget):
         self.key_signal.captured.connect(self.on_key_captured)
 
         layout = QVBoxLayout(self)
+        # ---------- Remove ----------
+        def remove_selected(self):
+            row = self.list_widget.currentRow()
+        if row < 0:
+            return
+
+        self.macros.pop(row)
+        self.refresh_list()
+        self.save_config()
 
         # ---------- HEADER ----------
         header_layout = QHBoxLayout()
