@@ -5,8 +5,8 @@ from PySide6.QtCore import QObject, Signal
 
 
 class MacroRunner(QObject):
-    tick = Signal(str, float)     # key, seconds_left
-    fired = Signal(str)           # key pressed
+    tick = Signal(str, float)   # key, seconds remaining
+    fired = Signal(str)
     stopped = Signal()
 
     def __init__(self):
@@ -30,12 +30,11 @@ class MacroRunner(QObject):
                     for m in macros:
                         if self.stop_event.is_set():
                             return
-
                         if not m.get("enabled", True):
                             continue
 
                         key = m["key"]
-                        delay = m["delay"]
+                        delay = float(m["delay"])
                         repeat = m["repeat"]
 
                         count = 0
@@ -44,16 +43,24 @@ class MacroRunner(QObject):
                             if self.stop_event.is_set():
                                 return
 
-                            # Countdown loop
-                            remaining = delay
-                            while remaining > 0:
+                            start = time.monotonic()
+                            end = start + delay
+
+                            # countdown
+                            while True:
+                                self.pause_event.wait()
                                 if self.stop_event.is_set():
                                     return
-                                self.pause_event.wait(0.1)
-                                remaining -= 0.1
-                                self.tick.emit(key, max(0, remaining))
 
-                            # Fire key
+                                now = time.monotonic()
+                                remaining = end - now
+                                if remaining <= 0:
+                                    break
+
+                                self.tick.emit(key, remaining)
+                                time.sleep(0.05)
+
+                            # fire key ONCE
                             try:
                                 self.keyboard.press(key)
                                 self.keyboard.release(key)
@@ -79,8 +86,6 @@ class MacroRunner(QObject):
     def stop(self):
         self.stop_event.set()
         self.pause_event.set()
-
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=1)
-
         self.thread = None
