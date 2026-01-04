@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QLabel, QInputDialog, QMessageBox, QCheckBox
 )
 from PySide6.QtCore import QObject, Signal, Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmap
 
 from pynput import keyboard
 from pynput.keyboard import GlobalHotKeys
@@ -88,6 +88,30 @@ class MacroApp(QWidget):
         # ---------- Layout ----------
         layout = QVBoxLayout(self)
 
+        # ---------- Header ----------
+        header = QHBoxLayout()
+
+        left_label = QLabel("BDP")
+        left_label.setStyleSheet("font-size:18px; font-weight:bold;")
+
+        icon_label = QLabel()
+        icon_pix = QPixmap("icon.ico").scaled(
+            28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+        icon_label.setPixmap(icon_pix)
+
+        right_label = QLabel("Macro")
+        right_label.setStyleSheet("font-size:18px; font-weight:bold;")
+
+        header.addWidget(left_label)
+        header.addStretch()
+        header.addWidget(icon_label)
+        header.addStretch()
+        header.addWidget(right_label)
+
+        layout.addLayout(header)
+
+        # ---------- Status ----------
         self.status_icon = QLabel("■")
         self.status_icon.setStyleSheet("font-size:20px; color:#ff5555;")
         self.status_text = QLabel("Stopped")
@@ -97,11 +121,14 @@ class MacroApp(QWidget):
         status_layout.addWidget(self.status_icon)
         status_layout.addWidget(self.status_text)
         status_layout.addStretch()
+
         layout.addLayout(status_layout)
 
+        # ---------- List ----------
         self.list_widget = QListWidget()
         layout.addWidget(self.list_widget)
 
+        # ---------- Buttons ----------
         btns = QHBoxLayout()
         self.add_btn = QPushButton("Add")
         self.remove_btn = QPushButton("Remove")
@@ -146,6 +173,16 @@ class MacroApp(QWidget):
             self.status_icon.setText("■")
             self.status_icon.setStyleSheet("color:#ff5555; font-size:20px;")
             self.status_text.setText("Stopped")
+
+    # ---------- UI ----------
+    def refresh_list(self):
+        self.list_widget.clear()
+        for entry in self.macros:
+            item = QListWidgetItem()
+            row = MacroRow(entry, self.edit_entry)
+            item.setSizeHint(row.sizeHint())
+            self.list_widget.addItem(item)
+            self.list_widget.setItemWidget(item, row)
 
     # ---------- Add ----------
     def add_key(self):
@@ -201,29 +238,24 @@ class MacroApp(QWidget):
     # ---------- Edit ----------
     def edit_entry(self, entry):
         name, ok = QInputDialog.getText(
-            self, "Edit Name", "Name:", text=entry["name"]
+            self, "Edit Name", "Name:", entry["name"]
         )
         if not ok:
             return
 
         delay, ok = QInputDialog.getDouble(
-            self, "Edit Delay", "Seconds:",
-            entry["delay"], 0, 1800, 2
+            self, "Edit Delay", "Seconds:", entry["delay"], 0, 1800, 2
         )
         if not ok:
             return
 
         repeat, ok = QInputDialog.getInt(
-            self, "Edit Repeat", "",
-            entry["repeat"], -1, 9999
+            self, "Edit Repeat", "", entry["repeat"], -1, 9999
         )
         if not ok:
             return
 
-        entry["name"] = name
-        entry["delay"] = delay
-        entry["repeat"] = repeat
-
+        entry.update(name=name, delay=delay, repeat=repeat)
         self.refresh_list()
         self.save_config()
 
