@@ -18,19 +18,15 @@ from macro_runner import MacroRunner
 from settings_dialog import SettingsDialog
 
 
-# ---------- Windows App ID ----------
 APP_ID = "MacroEditor.App"
 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
-
 CONFIG_FILE = "config.json"
 
 
-# ---------- Thread-safe key capture ----------
 class KeySignal(QObject):
-    captured = Signal(tuple)
+    captured = Signal(object)
 
 
-# ---------- Row Widget ----------
 class MacroRow(QWidget):
     def __init__(self, entry, edit_callback):
         super().__init__()
@@ -45,7 +41,8 @@ class MacroRow(QWidget):
 
         self.key_lbl = QLabel(entry["key"])
         self.name_lbl = QLabel(entry["name"])
-        self.info_lbl = QLabel()
+        self.timer_lbl = QLabel("—")
+        self.timer_lbl.setStyleSheet("color:#9adfff; min-width:60px;")
 
         self.edit_btn = QPushButton("✏️")
         self.edit_btn.setFixedWidth(34)
@@ -54,77 +51,71 @@ class MacroRow(QWidget):
         layout.addWidget(self.enabled)
         layout.addWidget(self.key_lbl)
         layout.addWidget(self.name_lbl, 1)
-        layout.addWidget(self.info_lbl)
+        layout.addWidget(self.timer_lbl)
         layout.addWidget(self.edit_btn)
-
-        self.refresh()
 
     def toggle(self, state):
         self.entry["enabled"] = bool(state)
 
-    def refresh(self):
-        repeat = self.entry.get("repeat", -1)
-        rep = "Loop" if repeat < 0 else f"x{repeat}"
-        self.info_lbl.setText(f'{self.entry["delay"]:.2f}s | {rep}')
+    def update_timer(self, seconds):
+        self.timer_lbl.setText(f"{seconds:0.1f}s")
+
+    def reset_timer(self):
+        self.timer_lbl.setText("—")
 
 
-# ---------- Main App ----------
 class MacroApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Macro Editor")
         self.setWindowIcon(QIcon("icon.ico"))
-        self.resize(640, 460)
+        self.resize(660, 470)
+
+        self.setStyleSheet("""
+        QWidget { background:#1e1e1e; color:white; font-size:14px; }
+        QPushButton { background:#3a3a3a; border-radius:6px; padding:8px 14px; }
+        QPushButton:hover { background:#505050; }
+        QListWidget { background:#2a2a2a; border-radius:8px; }
+        """)
 
         self.macros = []
+        self.rows = {}
+
         self.start_key = "f5"
         self.stop_key = "f6"
         self.pause_key = "f7"
 
         self.runner = MacroRunner()
+        self.runner.tick.connect(self.on_tick)
+        self.runner.fired.connect(self.on_fired)
+        self.runner.stopped.connect(self.on_stopped)
+
         self.key_signal = KeySignal()
         self.key_signal.captured.connect(self.on_key_captured)
 
-        self.build_ui()
-        self.load_config()
-        self.update_buttons()
-        self.setup_hotkeys()
-
-    # ---------- UI ----------
-    def build_ui(self):
         layout = QVBoxLayout(self)
 
+        # HEADER
         header = QHBoxLayout()
-        header.setAlignment(Qt.AlignCenter)
-
-        left = QLabel("BDP")
-        left.setStyleSheet("font-size:20px; font-weight:bold;")
-
         icon = QLabel()
-        pix = QPixmap("icon.ico").scaled(26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        icon.setPixmap(pix)
-
-        right = QLabel("Macro")
-        right.setStyleSheet("font-size:20px; font-weight:bold;")
-
-        header.addWidget(left)
+        icon.setPixmap(QPixmap("icon.ico").scaled(26, 26, Qt.KeepAspectRatio))
+        title = QLabel("BDP Macro")
+        title.setStyleSheet("font-size:20px; font-weight:bold;")
+        header.addStretch()
         header.addWidget(icon)
-        header.addWidget(right)
+        header.addWidget(title)
+        header.addStretch()
         layout.addLayout(header)
 
-        status = QHBoxLayout()
-        self.status_icon = QLabel("■")
-        self.status_icon.setStyleSheet("color:#ff5555; font-size:18px;")
-        self.status_text = QLabel("Stopped")
-        status.addWidget(QLabel("Status:"))
-        status.addWidget(self.status_icon)
-        status.addWidget(self.status_text)
-        status.addStretch()
-        layout.addLayout(status)
+        # STATUS
+        self.status = QLabel("Stopped")
+        layout.addWidget(self.status)
 
+        # LIST
         self.list_widget = QListWidget()
         layout.addWidget(self.list_widget)
 
+        # BUTTONS
         btns = QHBoxLayout()
         self.add_btn = QPushButton("Add")
         self.remove_btn = QPushButton("Remove")
@@ -140,7 +131,6 @@ class MacroApp(QWidget):
         btns.addWidget(self.start_btn)
         btns.addWidget(self.pause_btn)
         btns.addWidget(self.stop_btn)
-
         layout.addLayout(btns)
 
         self.add_btn.clicked.connect(self.add_key)
@@ -150,15 +140,52 @@ class MacroApp(QWidget):
         self.pause_btn.clicked.connect(self.pause_macro)
         self.stop_btn.clicked.connect(self.stop_macro)
 
+        self.load_config()
+        self.update_buttons()
+        self.setup_hotkeys()
+
+    # ---------- TIMER SIGNALS ----------
+    def on_tick(self, key, seconds):
+        if key in self.rows:
+            self.rows[key].update_timer(seconds)
+
+    def on_fired(self, key):
+        if key in self.rows:
+            self.rows[key].reset_timer()
+
+    def on_stopped(self):
+        for row in self.rows.values():
+            row.reset_timer()
+        self.status.setText("Stopped")
+
     # ---------- LIST ----------
     def refresh_list(self):
         self.list_widget.clear()
-        for entry in self.macros:
+        self.rows.clear()
+        for m in self.macros:
             item = QListWidgetItem()
-            row_widget = MacroRow(entry, self.edit_entry)
-            item.setSizeHint(row_widget.sizeHint())
+            row = MacroRow(m, self.edit_entry)
+            self.rows[m["key"]] = row
+            item.setSizeHint(row.sizeHint())
             self.list_widget.addItem(item)
-            self.list_widget.setItemWidget(item, row_widget)
+            self.list_widget.setItemWidget(item, row)
+
+    # ---------- CONTROLS ----------
+    def start_macro(self):
+        self.runner.start(self.macros)
+        self.status.setText("Running")
+
+    def pause_macro(self):
+        if self.runner.paused:
+            self.runner.resume()
+            self.status.setText("Running")
+        else:
+            self.runner.pause()
+            self.status.setText("Paused")
+
+    def stop_macro(self):
+        self.runner.stop()
+        self.status.setText("Stopped")
 
     # ---------- ADD / EDIT ----------
     def add_key(self):
@@ -184,16 +211,11 @@ class MacroApp(QWidget):
 
     def on_key_captured(self, data):
         name, key = data
-
-        delay, ok = QInputDialog.getDouble(
-            self, "Delay", "Seconds:", 0.5, 0, 1800, 2
-        )
+        delay, ok = QInputDialog.getDouble(self, "Delay", "Seconds:", 0.5, 0, 1800, 2)
         if not ok:
             return
 
-        repeat, ok = QInputDialog.getInt(
-            self, "Repeat (-1 = loop)", "", -1, -1, 9999
-        )
+        repeat, ok = QInputDialog.getInt(self, "Repeat (-1 = loop)", "", -1, -1, 9999)
         if not ok:
             return
 
@@ -210,19 +232,22 @@ class MacroApp(QWidget):
 
     def edit_entry(self, entry):
         name, ok = QInputDialog.getText(
-            self, "Edit Name", "Name:", text=entry["name"]
+            self, "Edit Name", "Name:",
+            Qt.QLineEdit.Normal, entry["name"]
         )
         if not ok:
             return
 
         delay, ok = QInputDialog.getDouble(
-            self, "Edit Delay", "Seconds:", entry["delay"], 0, 1800, 2
+            self, "Edit Delay", "Seconds:",
+            entry["delay"], 0, 1800, 2
         )
         if not ok:
             return
 
         repeat, ok = QInputDialog.getInt(
-            self, "Edit Repeat", "", entry["repeat"], -1, 9999
+            self, "Edit Repeat", "",
+            entry["repeat"], -1, 9999
         )
         if not ok:
             return
@@ -231,37 +256,12 @@ class MacroApp(QWidget):
         self.refresh_list()
         self.save_config()
 
-    # ---------- REMOVE ----------
     def remove_selected(self):
         row = self.list_widget.currentRow()
         if row >= 0:
             self.macros.pop(row)
             self.refresh_list()
             self.save_config()
-
-    # ---------- MACRO ----------
-    def start_macro(self):
-        self.runner.start([m for m in self.macros if m.get("enabled")])
-        self.set_status("running")
-
-    def pause_macro(self):
-        if self.runner.paused:
-            self.runner.resume()
-            self.set_status("running")
-        else:
-            self.runner.pause()
-            self.set_status("paused")
-
-    def stop_macro(self):
-        self.runner.stop()
-        self.set_status("stopped")
-
-    def set_status(self, state):
-        icons = {"running": "▶", "paused": "⏸", "stopped": "■"}
-        colors = {"running": "#55ff55", "paused": "#ffaa00", "stopped": "#ff5555"}
-        self.status_icon.setText(icons[state])
-        self.status_icon.setStyleSheet(f"color:{colors[state]}; font-size:18px;")
-        self.status_text.setText(state.capitalize())
 
     # ---------- SETTINGS ----------
     def open_settings(self):
@@ -296,9 +296,6 @@ class MacroApp(QWidget):
             with open(CONFIG_FILE) as f:
                 data = json.load(f)
                 self.macros = data.get("macros", [])
-                self.start_key = data.get("start_key", "f5")
-                self.stop_key = data.get("stop_key", "f6")
-                self.pause_key = data.get("pause_key", "f7")
                 self.refresh_list()
         except FileNotFoundError:
             pass
@@ -321,7 +318,6 @@ class MacroApp(QWidget):
         event.accept()
 
 
-# ---------- Run ----------
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon("icon.ico"))
