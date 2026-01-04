@@ -74,7 +74,31 @@ class MacroApp(QWidget):
         super().__init__()
         self.setWindowTitle("Macro Editor")
         self.setWindowIcon(QIcon("icon.ico"))
-        self.resize(640, 450)
+        self.resize(640, 460)
+
+        # ---------- Style ----------
+        self.setStyleSheet("""
+        QWidget {
+            background:#1e1e1e;
+            color:white;
+            font-size:14px;
+        }
+        QPushButton {
+            background:#3a3a3a;
+            border-radius:6px;
+            padding:8px 14px;
+        }
+        QPushButton:hover {
+            background:#505050;
+        }
+        QListWidget {
+            background:#2a2a2a;
+            border-radius:8px;
+        }
+        QCheckBox {
+            padding-right: 6px;
+        }
+        """)
 
         self.macros = []
         self.start_key = "f5"
@@ -85,36 +109,36 @@ class MacroApp(QWidget):
         self.key_signal = KeySignal()
         self.key_signal.captured.connect(self.on_key_captured)
 
-        # ---------- Layout ----------
         layout = QVBoxLayout(self)
 
-        # ---------- Header ----------
-        header = QHBoxLayout()
+        # ---------- HEADER ----------
+        header_layout = QHBoxLayout()
+        header_layout.setAlignment(Qt.AlignCenter)
+        header_layout.setSpacing(6)
 
-        left_label = QLabel("BDP")
-        left_label.setStyleSheet("font-size:18px; font-weight:bold;")
+        title_left = QLabel("BDP")
+        title_left.setStyleSheet("font-size:20px; font-weight:bold;")
 
         icon_label = QLabel()
-        icon_pix = QPixmap("icon.ico").scaled(
-            28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation
+        icon = QPixmap("icon.ico").scaled(
+            26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation
         )
-        icon_label.setPixmap(icon_pix)
+        icon_label.setPixmap(icon)
 
-        right_label = QLabel("Macro")
-        right_label.setStyleSheet("font-size:18px; font-weight:bold;")
+        title_right = QLabel("Macro")
+        title_right.setStyleSheet("font-size:20px; font-weight:bold;")
 
-        header.addWidget(left_label)
-        header.addStretch()
-        header.addWidget(icon_label)
-        header.addStretch()
-        header.addWidget(right_label)
+        header_layout.addWidget(title_left)
+        header_layout.addWidget(icon_label)
+        header_layout.addWidget(title_right)
 
-        layout.addLayout(header)
+        layout.addLayout(header_layout)
 
-        # ---------- Status ----------
+        # ---------- STATUS ----------
         self.status_icon = QLabel("■")
         self.status_icon.setStyleSheet("font-size:20px; color:#ff5555;")
         self.status_text = QLabel("Stopped")
+        self.status_text.setStyleSheet("font-weight:bold;")
 
         status_layout = QHBoxLayout()
         status_layout.addWidget(QLabel("Status:"))
@@ -124,17 +148,17 @@ class MacroApp(QWidget):
 
         layout.addLayout(status_layout)
 
-        # ---------- List ----------
+        # ---------- LIST ----------
         self.list_widget = QListWidget()
         layout.addWidget(self.list_widget)
 
-        # ---------- Buttons ----------
+        # ---------- BUTTONS ----------
         btns = QHBoxLayout()
         self.add_btn = QPushButton("Add")
         self.remove_btn = QPushButton("Remove")
         self.settings_btn = QPushButton("Settings")
-        self.pause_btn = QPushButton()
         self.start_btn = QPushButton()
+        self.pause_btn = QPushButton()
         self.stop_btn = QPushButton()
 
         btns.addWidget(self.add_btn)
@@ -159,7 +183,7 @@ class MacroApp(QWidget):
         self.update_buttons()
         self.setup_hotkeys()
 
-    # ---------- Status ----------
+    # ---------- STATUS ----------
     def set_status(self, state):
         if state == "running":
             self.status_icon.setText("▶")
@@ -184,7 +208,7 @@ class MacroApp(QWidget):
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, row)
 
-    # ---------- Add ----------
+    # ---------- ADD / EDIT ----------
     def add_key(self):
         name, ok = QInputDialog.getText(self, "Macro Name", "Name:")
         if not ok or not name:
@@ -235,11 +259,8 @@ class MacroApp(QWidget):
         self.refresh_list()
         self.save_config()
 
-    # ---------- Edit ----------
     def edit_entry(self, entry):
-        name, ok = QInputDialog.getText(
-            self, "Edit Name", "Name:", entry["name"]
-        )
+        name, ok = QInputDialog.getText(self, "Edit Name", "Name:", entry["name"])
         if not ok:
             return
 
@@ -259,7 +280,7 @@ class MacroApp(QWidget):
         self.refresh_list()
         self.save_config()
 
-    # ---------- Remove ----------
+    # ---------- REMOVE ----------
     def remove_selected(self):
         row = self.list_widget.currentRow()
         if row >= 0:
@@ -267,10 +288,9 @@ class MacroApp(QWidget):
             self.refresh_list()
             self.save_config()
 
-    # ---------- Macro ----------
+    # ---------- MACRO ----------
     def start_macro(self):
-        active = [m for m in self.macros if m.get("enabled", True)]
-        self.runner.start(active)
+        self.runner.start([m for m in self.macros if m.get("enabled", True)])
         self.set_status("running")
 
     def pause_macro(self):
@@ -285,7 +305,7 @@ class MacroApp(QWidget):
         self.runner.stop()
         self.set_status("stopped")
 
-    # ---------- Settings ----------
+    # ---------- SETTINGS ----------
     def open_settings(self):
         dlg = SettingsDialog(self.start_key, self.stop_key, self.pause_key)
         if dlg.exec():
@@ -312,7 +332,7 @@ class MacroApp(QWidget):
         })
         self.hotkeys.start()
 
-    # ---------- Save / Load ----------
+    # ---------- SAVE / LOAD ----------
     def load_config(self):
         try:
             with open(CONFIG_FILE) as f:
@@ -334,18 +354,12 @@ class MacroApp(QWidget):
                 "macros": self.macros
             }, f, indent=2)
 
-    # ---------- HARD EXIT FIX ----------
     def closeEvent(self, event):
         try:
             self.runner.stop()
-        except Exception:
-            pass
-
-        try:
             self.hotkeys.stop()
         except Exception:
             pass
-
         event.accept()
 
 
