@@ -1,5 +1,8 @@
 import json
 import threading
+import sys
+import ctypes
+
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QListWidget, QListWidgetItem,
@@ -14,6 +17,10 @@ from macro_runner import MacroRunner
 from settings_dialog import SettingsDialog
 
 CONFIG_FILE = "config.json"
+if sys.platform == "win32":
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+        "macro.editor.app"
+    )
 
 
 class KeySignal(QObject):
@@ -269,6 +276,8 @@ class MacroApp(QWidget):
 
 if __name__ == "__main__":
     app = QApplication([])
+    app.setWindowIcon(QIcon("icon.ico"))
+
     w = MacroApp()
     w.show()
     app.exec()
