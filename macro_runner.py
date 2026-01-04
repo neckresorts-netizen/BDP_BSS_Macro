@@ -2,26 +2,26 @@ import threading
 import time
 from pynput.keyboard import Controller
 
+keyboard_controller = Controller()
+
 
 class MacroRunner:
     def __init__(self):
-        self.running = False
         self.threads = []
-        self.keyboard = Controller()
+        self.stop_event = threading.Event()
+        self.pause_event = threading.Event()
+        self.pause_event.set()  # not paused initially
+        self.running = False
 
     def start(self, macros):
-        if self.running:
-            return
-
+        self.stop()
+        self.stop_event.clear()
+        self.pause_event.set()
         self.running = True
-        self.threads = []
 
         for entry in macros:
-            if not entry.get("enabled", True):
-                continue  # skip disabled macros
-
             t = threading.Thread(
-                target=self.run_single_macro,
+                target=self.run_macro,
                 args=(entry,),
                 daemon=True
             )
@@ -30,26 +30,43 @@ class MacroRunner:
 
     def stop(self):
         self.running = False
+        self.stop_event.set()
+        self.pause_event.set()
+        self.threads.clear()
 
-    def run_single_macro(self, entry):
-        key = entry["key"]
+    def pause(self):
+        if self.running:
+            self.pause_event.clear()
+
+    def resume(self):
+        if self.running:
+            self.pause_event.set()
+
+    def run_macro(self, entry):
         delay = entry["delay"]
-        repeat = entry.get("repeat", -1)
+        repeat = entry["repeat"]
 
-        if repeat < 0:
-            while self.running:
-                time.sleep(delay)
-                self.press_key(key)
-        else:
-            for _ in range(repeat):
-                if not self.running:
+        count = 0
+        while not self.stop_event.is_set():
+            if repeat >= 0 and count >= repeat:
+                break
+
+            remaining = delay
+            while remaining > 0:
+                if self.stop_event.is_set():
                     return
-                time.sleep(delay)
-                self.press_key(key)
 
-    def press_key(self, key):
-        try:
-            self.keyboard.press(key)
-            self.keyboard.release(key)
-        except Exception:
-            pass
+                self.pause_event.wait()  # pause-safe
+
+                step = min(0.05, remaining)
+                time.sleep(step)
+                remaining -= step
+
+            if self.stop_event.is_set():
+                return
+
+            self.pause_event.wait()
+            keyboard_controller.press(entry["key"])
+            keyboard_controller.release(entry["key"])
+
+            count += 1
