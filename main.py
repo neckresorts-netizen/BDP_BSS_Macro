@@ -1,3 +1,4 @@
+# ---------------- Windows App ID (MUST be first) ----------------
 import sys
 import ctypes
 
@@ -62,6 +63,7 @@ class MacroRow(QWidget):
     def refresh(self):
         repeat = self.entry.get("repeat", -1)
         rep = "Loop" if repeat < 0 else f"x{repeat}"
+
         delay = self.entry["delay"]
         mins = int(delay // 60)
         secs = int(delay % 60)
@@ -296,9 +298,8 @@ if __name__ == "__main__":
     app = QApplication([])
     app.setApplicationName("Macro Editor")
     app.setOrganizationName("BigEyes101")
-    app.setDesktopFileName("MacroEditor")
+    app.setDesktopFileName("MacroEditor")  # last Windows hint
     app.setWindowIcon(QIcon("icon.ico"))
-
 
     w = MacroApp()
     w.show()
