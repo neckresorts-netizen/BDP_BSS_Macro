@@ -37,25 +37,38 @@ class MacroRow(QWidget):
         self.entry = entry
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(10)
 
         self.enabled = QCheckBox()
         self.enabled.setChecked(entry.get("enabled", True))
         self.enabled.stateChanged.connect(self.toggle)
 
         self.key_lbl = QLabel(entry["key"])
+        self.key_lbl.setMinimumWidth(40)
+        self.key_lbl.setStyleSheet("font-weight:bold;")
+        
         self.name_lbl = QLabel(entry["name"])
 
+        # Info label showing delay and repeat
+        repeat = entry.get("repeat", -1)
+        rep = "Loop" if repeat < 0 else f"x{repeat}"
+        self.info_lbl = QLabel(f'{entry["delay"]:.2f}s | {rep}')
+        self.info_lbl.setStyleSheet("color:#888;")
+        self.info_lbl.setMinimumWidth(80)
+
         self.timer_lbl = QLabel("—")
-        self.timer_lbl.setStyleSheet("color:#9adfff; min-width:60px;")
+        self.timer_lbl.setStyleSheet("color:#9adfff; min-width:70px;")
+        self.timer_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         self.edit_btn = QPushButton("✏️")
-        self.edit_btn.setFixedWidth(34)
+        self.edit_btn.setFixedSize(40, 32)
         self.edit_btn.clicked.connect(lambda: edit_callback(entry))
 
         layout.addWidget(self.enabled)
         layout.addWidget(self.key_lbl)
         layout.addWidget(self.name_lbl, 1)
+        layout.addWidget(self.info_lbl)
         layout.addWidget(self.timer_lbl)
         layout.addWidget(self.edit_btn)
 
@@ -75,13 +88,13 @@ class MacroApp(QWidget):
         super().__init__()
         self.setWindowTitle("Macro Editor")
         self.setWindowIcon(QIcon("icon.ico"))
-        self.resize(660, 470)
+        self.resize(700, 470)
 
         self.setStyleSheet("""
         QWidget { background:#1e1e1e; color:white; font-size:14px; }
         QPushButton { background:#3a3a3a; border-radius:6px; padding:8px 14px; }
         QPushButton:hover { background:#505050; }
-        QListWidget { background:#2a2a2a; border-radius:8px; }
+        QListWidget { background:#2a2a2a; border-radius:8px; padding:4px; }
         """)
 
         self.macros = []
@@ -269,7 +282,10 @@ class MacroApp(QWidget):
         if not ok:
             return
 
-        entry.update(name=name, delay=delay, repeat=repeat)
+        entry["name"] = name
+        entry["delay"] = delay
+        entry["repeat"] = repeat
+        
         self.refresh_list()
         self.save_config()
 
