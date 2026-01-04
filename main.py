@@ -180,9 +180,9 @@ class MacroApp(QWidget):
         QPushButton { background:#3a3a3a; border-radius:6px; padding:8px 14px; }
         QPushButton:hover { background:#505050; }
         QListWidget { 
-            background:#1e1e1e; 
-            border-radius:8px; 
-            padding:6px;
+            background:#2a2a2a; 
+            border-radius:10px; 
+            padding:8px;
             border: none;
         }
         QListWidget::item {
