@@ -19,7 +19,6 @@ class KeySignal(QObject):
     captured = Signal(object)
 
 
-
 class MacroRow(QWidget):
     def __init__(self, entry):
         super().__init__()
@@ -125,12 +124,12 @@ class MacroApp(QWidget):
 
         threading.Thread(target=listen, daemon=True).start()
 
-      def on_key_captured(self, data):
+    def on_key_captured(self, data):
         if not isinstance(data, tuple) or len(data) != 2:
-            return  # ignore invalid signal
-    
+            return
+
         name, key = data
-    
+
         delay, ok = QInputDialog.getDouble(
             self, "Delay", "Seconds:", 0.5, 0, 60, 2
         )
@@ -143,14 +142,14 @@ class MacroApp(QWidget):
         if not ok:
             return
 
-    self.macros.append({
-        "name": name,
-        "key": key,
-        "delay": delay,
-        "repeat": repeat
-    })
-    self.refresh_list()
-    self.save_config()
+        self.macros.append({
+            "name": name,
+            "key": key,
+            "delay": delay,
+            "repeat": repeat
+        })
+        self.refresh_list()
+        self.save_config()
 
     # ---------- Edit ----------
     def edit_entry(self, entry):
