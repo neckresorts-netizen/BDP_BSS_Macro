@@ -6,11 +6,10 @@ import ctypes
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QListWidget, QListWidgetItem,
-    QLabel, QInputDialog, QMessageBox, QCheckBox,
-    QSystemTrayIcon, QMenu
+    QLabel, QInputDialog, QMessageBox, QCheckBox
 )
 from PySide6.QtCore import QObject, Signal, Qt
-from PySide6.QtGui import QIcon, QAction
+from PySide6.QtGui import QIcon
 
 from pynput import keyboard
 from pynput.keyboard import GlobalHotKeys
@@ -135,33 +134,6 @@ class MacroApp(QWidget):
         self.load_config()
         self.update_buttons()
         self.setup_hotkeys()
-        self.setup_tray()
-
-    # ---------- Tray ----------
-    def setup_tray(self):
-        self.tray = QSystemTrayIcon(QIcon("icon.ico"), self)
-        self.tray.setToolTip("Macro Editor")
-
-        menu = QMenu()
-        menu.addAction(QAction("Show", self, triggered=self.show))
-        menu.addSeparator()
-        menu.addAction(QAction("Start Macros", self, triggered=self.start_macro))
-        menu.addAction(QAction("Stop Macros", self, triggered=self.stop_macro))
-        menu.addSeparator()
-        menu.addAction(QAction("Quit", self, triggered=QApplication.quit))
-
-        self.tray.setContextMenu(menu)
-        self.tray.show()
-
-    def closeEvent(self, event):
-        event.ignore()
-        self.hide()
-        self.tray.showMessage(
-            "Macro Editor",
-            "Still running in the system tray",
-            QSystemTrayIcon.Information,
-            2000
-        )
 
     # ---------- Add ----------
     def add_key(self):
