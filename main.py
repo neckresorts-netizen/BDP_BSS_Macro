@@ -232,43 +232,48 @@ class MacroApp(QWidget):
         self.refresh_list()
         self.save_config()
 
-    def edit_entry(self, entry):
-    name, ok = QInputDialog.getText(
-        self,
-        "Edit Name",
-        "Name:",
-        QLineEdit.Normal,
-        entry["name"]
-    )
-    if not ok or not name:
-        return
+     def edit_entry(self, entry):
+        name, ok = QInputDialog.getText(
+            self,
+            "Edit Name",
+            "Name:",
+            QLineEdit.Normal,
+            entry["name"]
+        )
+        if not ok or not name:
+            return
 
-    delay, ok = QInputDialog.getDouble(
-        self,
-        "Edit Delay",
-        "Seconds:",
-        entry["delay"],
-        0,
-        1800,
-        2
-    )
-    if not ok:
-        return
+        delay, ok = QInputDialog.getDouble(
+            self,
+            "Edit Delay",
+            "Seconds:",
+            entry["delay"],
+            0,
+            1800,
+            2
+        )
+        if not ok:
+            return
 
-    repeat, ok = QInputDialog.getInt(
-        self,
-        "Edit Repeat",
-        "",
-        entry["repeat"],
-        -1,
-        9999
-    )
-    if not ok:
-        return
+        repeat, ok = QInputDialog.getInt(
+            self,
+            "Edit Repeat",
+            "",
+            entry["repeat"],
+            -1,
+            9999
+        )
+        if not ok:
+            return
 
-    entry.update(name=name, delay=delay, repeat=repeat)
-    self.refresh_list()
-    self.save_config()
+        entry.update(
+            name=name,
+            delay=delay,
+            repeat=repeat
+        )
+
+        self.refresh_list()
+        self.save_config()
 
 
     def remove_selected(self):
