@@ -18,6 +18,7 @@ class MacroRunner(QObject):
         self.paused = False
         self.running = False
         self.center_thread = None
+        self.center_alternate = True  # Track which pattern to use next in auto mode
     
     def start(self, macros):
         self.stop()
@@ -43,6 +44,7 @@ class MacroRunner(QObject):
     def start_with_center(self, macros, center_config):
         """Start macros with auto center alignment"""
         self.start(macros)
+        self.center_alternate = True  # Reset alternation at start
         
         # Start center alignment in auto mode
         self.center_thread = threading.Thread(
@@ -57,6 +59,7 @@ class MacroRunner(QObject):
         """Run center alignment in auto mode"""
         try:
             interval = center_config["center_config"]["interval"]
+            pattern = center_config["center_config"]["pattern"]
             
             while not self.stop_event.is_set():
                 self.pause_event.wait()
@@ -83,34 +86,61 @@ class MacroRunner(QObject):
                     self.tick.emit("_center_", remaining)
                     time.sleep(0.05)
                 
+                # Determine which pattern to fire
+                if pattern == "Alternate Both":
+                    # Alternate between patterns
+                    pattern_num = 1 if self.center_alternate else 2
+                    self.center_alternate = not self.center_alternate
+                elif pattern == "Only ,.":
+                    pattern_num = 1
+                else:  # "Only .,"
+                    pattern_num = 2
+                
                 # Fire center alignment sequence
-                self._fire_center_sequence()
+                self._fire_center_sequence(pattern_num)
                 self.fired.emit("_center_")
         
         except Exception as e:
             print(f"Error in center alignment auto: {e}")
     
-    def fire_center_alignment(self):
-        """Manually trigger center alignment (for manual mode)"""
+    def fire_center_alignment(self, pattern_num=1):
+        """Manually trigger center alignment (for manual mode)
+        pattern_num: 1 for ,. and 2 for .,
+        """
         if not self.running or self.stop_event.is_set():
             return
         
-        threading.Thread(target=self._fire_center_sequence, daemon=True).start()
+        threading.Thread(target=self._fire_center_sequence, args=(pattern_num,), daemon=True).start()
         self.fired.emit("_center_")
     
-    def _fire_center_sequence(self):
-        """Execute the center alignment key sequence: , wait 50ms ."""
+    def _fire_center_sequence(self, pattern_num=1):
+        """Execute the center alignment key sequence
+        pattern_num: 1 for , → 1ms → .
+                     2 for . → 1ms → ,
+        """
         try:
-            # Press ,
-            self.keyboard.press(',')
-            self.keyboard.release(',')
-            
-            # Wait 50ms
-            time.sleep(0.05)
-            
-            # Press .
-            self.keyboard.press('.')
-            self.keyboard.release('.')
+            if pattern_num == 1:
+                # Press ,
+                self.keyboard.press(',')
+                self.keyboard.release(',')
+                
+                # Wait 1ms
+                time.sleep(0.001)
+                
+                # Press .
+                self.keyboard.press('.')
+                self.keyboard.release('.')
+            else:
+                # Press .
+                self.keyboard.press('.')
+                self.keyboard.release('.')
+                
+                # Wait 1ms
+                time.sleep(0.001)
+                
+                # Press ,
+                self.keyboard.press(',')
+                self.keyboard.release(',')
         except Exception as e:
             print(f"Error firing center sequence: {e}")
     
@@ -180,4 +210,5 @@ class MacroRunner(QObject):
         
         self.threads = []
         self.center_thread = None
+        self.center_alternate = True  # Reset alternation
         self.stopped.emit()
