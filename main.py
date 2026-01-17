@@ -66,7 +66,7 @@ class CenterAlignmentDialog(QDialog):
         title.setStyleSheet("font-size: 16px; font-weight: bold; color: white;")
         layout.addWidget(title)
         
-        desc = QLabel("Presses: , → 1ms → . or . → 1ms → ,")
+        desc = QLabel("Presses: Left (,) → 1ms → Right (.) or Right (.) → 1ms → Left (,)")
         desc.setStyleSheet("font-size: 12px; color: #888;")
         layout.addWidget(desc)
         
@@ -89,13 +89,13 @@ class CenterAlignmentDialog(QDialog):
         manual_layout = QHBoxLayout()
         
         left_layout = QVBoxLayout()
-        left_layout.addWidget(QLabel(",."))
+        left_layout.addWidget(QLabel("Left Right"))
         self.key1_btn = QPushButton(center_config.get("trigger_key1", "f").upper())
         self.key1_btn.clicked.connect(lambda: self.capture_key(1))
         left_layout.addWidget(self.key1_btn)
         
         right_layout = QVBoxLayout()
-        right_layout.addWidget(QLabel(".,"))
+        right_layout.addWidget(QLabel("Right Left"))
         self.key2_btn = QPushButton(center_config.get("trigger_key2", "g").upper())
         self.key2_btn.clicked.connect(lambda: self.capture_key(2))
         right_layout.addWidget(self.key2_btn)
@@ -118,7 +118,7 @@ class CenterAlignmentDialog(QDialog):
         auto_layout.addWidget(pattern_label)
         
         self.pattern_combo = QComboBox()
-        self.pattern_combo.addItems(["Alternate Both", "Only ,.", "Only .,"])
+        self.pattern_combo.addItems(["Alternate Both", "Only Left Right", "Only Right Left"])
         self.pattern_combo.setCurrentText(center_config.get("pattern", "Alternate Both"))
         auto_layout.addWidget(self.pattern_combo)
         
@@ -275,10 +275,10 @@ class MacroRow(QWidget):
                 interval = entry.get("center_config", {}).get("interval", 1.0)
                 if pattern == "Alternate Both":
                     info_text = f"Auto | Alt | {interval:.2f}s"
-                elif pattern == "Only ,.":
-                    info_text = f"Auto | ,. | {interval:.2f}s"
+                elif pattern == "Only Left Right":
+                    info_text = f"Auto | L-R | {interval:.2f}s"
                 else:
-                    info_text = f"Auto | ., | {interval:.2f}s"
+                    info_text = f"Auto | R-L | {interval:.2f}s"
             else:
                 key1 = entry.get("center_config", {}).get("trigger_key1", "f")
                 key2 = entry.get("center_config", {}).get("trigger_key2", "g")
@@ -371,10 +371,10 @@ class MacroRow(QWidget):
                 interval = self.entry.get("center_config", {}).get("interval", 1.0)
                 if pattern == "Alternate Both":
                     info_text = f"Auto | Alt | {interval:.2f}s"
-                elif pattern == "Only ,.":
-                    info_text = f"Auto | ,. | {interval:.2f}s"
+                elif pattern == "Only Left Right":
+                    info_text = f"Auto | L-R | {interval:.2f}s"
                 else:
-                    info_text = f"Auto | ., | {interval:.2f}s"
+                    info_text = f"Auto | R-L | {interval:.2f}s"
             else:
                 key1 = self.entry.get("center_config", {}).get("trigger_key1", "f")
                 key2 = self.entry.get("center_config", {}).get("trigger_key2", "g")
@@ -580,11 +580,11 @@ class MacroApp(QWidget):
         
         def on_trigger1():
             if self.runner.running:
-                self.runner.fire_center_alignment(1)  # Fire ,. pattern
+                self.runner.fire_center_alignment(1)  # Fire Left Right (,.) pattern
         
         def on_trigger2():
             if self.runner.running:
-                self.runner.fire_center_alignment(2)  # Fire ., pattern
+                self.runner.fire_center_alignment(2)  # Fire Right Left (.,) pattern
         
         try:
             if self.manual_trigger_listener:
