@@ -6,7 +6,8 @@ import sys
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QListWidget, QListWidgetItem,
-    QLabel, QInputDialog, QMessageBox, QCheckBox, QLineEdit
+    QLabel, QInputDialog, QMessageBox, QCheckBox, QLineEdit,
+    QDialog, QComboBox, QDoubleSpinBox
 )
 from PySide6.QtCore import QObject, Signal, Qt, QSize
 from PySide6.QtGui import QIcon, QPixmap
@@ -30,22 +31,142 @@ class KeySignal(QObject):
     captured = Signal(object)
 
 
+# ---------- Center Alignment Edit Dialog ----------
+class CenterAlignmentDialog(QDialog):
+    def __init__(self, center_config, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Edit Center Alignment")
+        self.setMinimumSize(350, 250)
+        
+        self.setStyleSheet("""
+            QDialog { background-color: #1e1e1e; color: #ffffff; }
+            QLabel { color: #dddddd; padding: 2px; }
+            QComboBox, QDoubleSpinBox {
+                background-color: #2a2a2a;
+                color: #ffffff;
+                padding: 8px;
+                border-radius: 6px;
+                border: 1px solid #3a3a3a;
+            }
+            QPushButton {
+                background-color: #3a3a3a;
+                color: #ffffff;
+                border-radius: 6px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover { background-color: #505050; }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Title
+        title = QLabel("Center Alignment Macro")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: white;")
+        layout.addWidget(title)
+        
+        # Mode selection
+        mode_label = QLabel("Mode:")
+        mode_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(mode_label)
+        
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItems(["Auto", "Manual"])
+        self.mode_combo.setCurrentText(center_config.get("mode", "Auto"))
+        self.mode_combo.currentTextChanged.connect(self.on_mode_changed)
+        layout.addWidget(self.mode_combo)
+        
+        # Manual keybind
+        self.manual_label = QLabel("Trigger Key:")
+        self.manual_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(self.manual_label)
+        
+        self.key_btn = QPushButton(center_config.get("trigger_key", "f").upper())
+        self.key_btn.clicked.connect(self.capture_key)
+        layout.addWidget(self.key_btn)
+        
+        # Auto interval
+        self.auto_label = QLabel("Interval (seconds):")
+        self.auto_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(self.auto_label)
+        
+        self.interval_spin = QDoubleSpinBox()
+        self.interval_spin.setRange(0.1, 1800)
+        self.interval_spin.setDecimals(2)
+        self.interval_spin.setValue(center_config.get("interval", 1.0))
+        layout.addWidget(self.interval_spin)
+        
+        layout.addStretch()
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        self.on_mode_changed(self.mode_combo.currentText())
+        
+        self.key_signal = KeySignal()
+        self.key_signal.captured.connect(self.on_key_captured)
+    
+    def on_mode_changed(self, mode):
+        is_manual = mode == "Manual"
+        self.manual_label.setVisible(is_manual)
+        self.key_btn.setVisible(is_manual)
+        self.auto_label.setVisible(not is_manual)
+        self.interval_spin.setVisible(not is_manual)
+    
+    def capture_key(self):
+        QMessageBox.information(self, "Capture Key", "Press a key")
+        
+        def listen():
+            def on_press(k):
+                try:
+                    key = k.char
+                except AttributeError:
+                    key = str(k).replace("Key.", "")
+                self.key_signal.captured.emit(key)
+                return False
+            
+            with keyboard.Listener(on_press=on_press) as l:
+                l.join()
+        
+        threading.Thread(target=listen, daemon=True).start()
+    
+    def on_key_captured(self, key):
+        self.key_btn.setText(key.upper())
+    
+    def get_config(self):
+        return {
+            "mode": self.mode_combo.currentText(),
+            "trigger_key": self.key_btn.text().lower(),
+            "interval": self.interval_spin.value()
+        }
+
+
 # ---------- Row Widget ----------
 class MacroRow(QWidget):
-    def __init__(self, entry, edit_callback):
+    def __init__(self, entry, edit_callback, is_center=False):
         super().__init__()
         self.entry = entry
+        self.is_center = is_center
         
         # Rounded background styling
-        self.setStyleSheet("""
-            MacroRow {
-                background-color: #2d2d2d;
+        bg_color = "#2d3d2d" if is_center else "#2d2d2d"
+        self.setStyleSheet(f"""
+            MacroRow {{
+                background-color: {bg_color};
                 border-radius: 10px;
                 margin: 2px;
-            }
-            MacroRow:hover {
-                background-color: #353535;
-            }
+            }}
+            MacroRow:hover {{
+                background-color: {"#354535" if is_center else "#353535"};
+            }}
         """)
 
         layout = QHBoxLayout(self)
@@ -72,25 +193,49 @@ class MacroRow(QWidget):
             }
         """)
 
-        self.key_lbl = QLabel(entry["key"].upper())
-        self.key_lbl.setMinimumWidth(45)
-        self.key_lbl.setAlignment(Qt.AlignCenter)
-        self.key_lbl.setStyleSheet("""
-            background-color: #4a9eff;
-            color: white;
-            font-weight: bold;
-            border-radius: 6px;
-            padding: 6px 10px;
-            font-size: 13px;
-        """)
+        if is_center:
+            self.key_lbl = QLabel("⚙️")
+            self.key_lbl.setMinimumWidth(45)
+            self.key_lbl.setAlignment(Qt.AlignCenter)
+            self.key_lbl.setStyleSheet("""
+                background-color: #5a9e5a;
+                color: white;
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 16px;
+            """)
+        else:
+            self.key_lbl = QLabel(entry["key"].upper())
+            self.key_lbl.setMinimumWidth(45)
+            self.key_lbl.setAlignment(Qt.AlignCenter)
+            self.key_lbl.setStyleSheet("""
+                background-color: #4a9eff;
+                color: white;
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 13px;
+            """)
         
         self.name_lbl = QLabel(entry["name"])
         self.name_lbl.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: 500;")
 
-        # Info label showing delay and repeat
-        repeat = entry.get("repeat", -1)
-        rep = "Loop" if repeat < 0 else f"x{repeat}"
-        self.info_lbl = QLabel(f'{entry["delay"]:.2f}s | {rep}')
+        # Info label
+        if is_center:
+            mode = entry.get("center_config", {}).get("mode", "Auto")
+            if mode == "Auto":
+                interval = entry.get("center_config", {}).get("interval", 1.0)
+                info_text = f"Auto | {interval:.2f}s"
+            else:
+                trigger = entry.get("center_config", {}).get("trigger_key", "f")
+                info_text = f"Manual | {trigger.upper()}"
+            self.info_lbl = QLabel(info_text)
+        else:
+            repeat = entry.get("repeat", -1)
+            rep = "Loop" if repeat < 0 else f"x{repeat}"
+            self.info_lbl = QLabel(f'{entry["delay"]:.2f}s | {rep}')
+        
         self.info_lbl.setStyleSheet("""
             color: #999;
             background-color: #252525;
@@ -164,7 +309,17 @@ class MacroRow(QWidget):
             min-width: 70px;
             font-size: 12px;
         """)
-
+    
+    def refresh_info(self):
+        if self.is_center:
+            mode = self.entry.get("center_config", {}).get("mode", "Auto")
+            if mode == "Auto":
+                interval = self.entry.get("center_config", {}).get("interval", 1.0)
+                info_text = f"Auto | {interval:.2f}s"
+            else:
+                trigger = self.entry.get("center_config", {}).get("trigger_key", "f")
+                info_text = f"Manual | {trigger.upper()}"
+            self.info_lbl.setText(info_text)
 
 
 # ---------- Main App ----------
@@ -197,6 +352,16 @@ class MacroApp(QWidget):
         """)
 
         self.macros = []
+        self.center_alignment = {
+            "name": "Center Alignment",
+            "enabled": True,
+            "is_center": True,
+            "center_config": {
+                "mode": "Auto",
+                "trigger_key": "f",
+                "interval": 1.0
+            }
+        }
         self.rows = {}
 
         self.start_key = "f5"
@@ -210,6 +375,8 @@ class MacroApp(QWidget):
 
         self.key_signal = KeySignal()
         self.key_signal.captured.connect(self.on_key_captured)
+        
+        self.manual_trigger_listener = None
 
         layout = QVBoxLayout(self)
 
@@ -242,6 +409,11 @@ class MacroApp(QWidget):
         self.add_btn = QPushButton("Add")
         self.remove_btn = QPushButton("Remove")
         self.settings_btn = QPushButton("Settings")
+        
+        self.credits = QLabel("Created by Big_eyes101")
+        self.credits.setStyleSheet("color: #888888; font-size: 12px;")
+        self.credits.setAlignment(Qt.AlignCenter)
+        
         self.start_btn = QPushButton()
         self.pause_btn = QPushButton()
         self.stop_btn = QPushButton()
@@ -249,6 +421,8 @@ class MacroApp(QWidget):
         btns.addWidget(self.add_btn)
         btns.addWidget(self.remove_btn)
         btns.addWidget(self.settings_btn)
+        btns.addStretch()
+        btns.addWidget(self.credits)
         btns.addStretch()
         btns.addWidget(self.start_btn)
         btns.addWidget(self.pause_btn)
@@ -280,27 +454,49 @@ class MacroApp(QWidget):
         for row in self.rows.values():
             row.reset_timer()
         self.status.setText("Stopped")
+        self.stop_manual_trigger()
 
     # ---------- LIST ----------
     def refresh_list(self):
         self.list_widget.clear()
         self.rows.clear()
 
+        # Add center alignment first
+        item = QListWidgetItem()
+        row = MacroRow(self.center_alignment, self.edit_center_alignment, is_center=True)
+        self.rows["_center_"] = row
+        size_hint = row.sizeHint()
+        item.setSizeHint(size_hint + QSize(0, 8))
+        self.list_widget.addItem(item)
+        self.list_widget.setItemWidget(item, row)
+
+        # Add regular macros
         for m in self.macros:
             item = QListWidgetItem()
             row = MacroRow(m, self.edit_entry)
             self.rows[m["key"]] = row
-            
-            # Add some height for better spacing
             size_hint = row.sizeHint()
             item.setSizeHint(size_hint + QSize(0, 8))
-            
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, row)
 
     # ---------- CONTROLS ----------
     def start_macro(self):
-        self.runner.start([m for m in self.macros if m.get("enabled", True)])
+        regular_macros = [m for m in self.macros if m.get("enabled", True)]
+        
+        # Handle center alignment
+        if self.center_alignment.get("enabled", True):
+            mode = self.center_alignment["center_config"]["mode"]
+            if mode == "Auto":
+                # Add as regular macro with special handling
+                self.runner.start_with_center(regular_macros, self.center_alignment)
+            else:
+                # Manual mode - start regular macros and set up trigger
+                self.runner.start(regular_macros)
+                self.setup_manual_trigger()
+        else:
+            self.runner.start(regular_macros)
+        
         self.status.setText("Running")
 
     def pause_macro(self):
@@ -313,7 +509,34 @@ class MacroApp(QWidget):
 
     def stop_macro(self):
         self.runner.stop()
+        self.stop_manual_trigger()
         self.status.setText("Stopped")
+    
+    def setup_manual_trigger(self):
+        trigger_key = self.center_alignment["center_config"]["trigger_key"]
+        
+        def on_trigger():
+            if self.runner.running:
+                self.runner.fire_center_alignment()
+        
+        try:
+            if self.manual_trigger_listener:
+                self.manual_trigger_listener.stop()
+        except:
+            pass
+        
+        self.manual_trigger_listener = GlobalHotKeys({
+            f"<{trigger_key}>": on_trigger
+        })
+        self.manual_trigger_listener.start()
+    
+    def stop_manual_trigger(self):
+        try:
+            if self.manual_trigger_listener:
+                self.manual_trigger_listener.stop()
+                self.manual_trigger_listener = None
+        except:
+            pass
 
     # ---------- ADD ----------
     def add_key(self):
@@ -391,12 +614,22 @@ class MacroApp(QWidget):
         
         self.refresh_list()
         self.save_config()
+    
+    def edit_center_alignment(self, entry):
+        dlg = CenterAlignmentDialog(self.center_alignment["center_config"], self)
+        if dlg.exec():
+            self.center_alignment["center_config"] = dlg.get_config()
+            self.refresh_list()
+            self.save_config()
 
     # ---------- REMOVE ----------
     def remove_selected(self):
         row = self.list_widget.currentRow()
-        if row >= 0:
-            self.macros.pop(row)
+        if row == 0:
+            QMessageBox.warning(self, "Cannot Delete", "Center Alignment macro cannot be deleted.")
+            return
+        if row > 0:
+            self.macros.pop(row - 1)  # -1 because center alignment is at index 0
             self.refresh_list()
             self.save_config()
 
@@ -436,6 +669,7 @@ class MacroApp(QWidget):
                 self.start_key = data.get("start_key", self.start_key)
                 self.stop_key = data.get("stop_key", self.stop_key)
                 self.pause_key = data.get("pause_key", self.pause_key)
+                self.center_alignment = data.get("center_alignment", self.center_alignment)
                 self.refresh_list()
         except FileNotFoundError:
             pass
@@ -446,11 +680,13 @@ class MacroApp(QWidget):
                 "start_key": self.start_key,
                 "stop_key": self.stop_key,
                 "pause_key": self.pause_key,
+                "center_alignment": self.center_alignment,
                 "macros": self.macros
             }, f, indent=2)
 
     def closeEvent(self, event):
         self.runner.stop()
+        self.stop_manual_trigger()
         try:
             self.hotkeys.stop()
         except Exception:
