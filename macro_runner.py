@@ -99,18 +99,18 @@ class MacroRunner(QObject):
         self.fired.emit("_center_")
     
     def _fire_center_sequence(self):
-        """Execute the center alignment key sequence: > wait 50ms <"""
+        """Execute the center alignment key sequence: , wait 50ms ."""
         try:
-            # Press >
-            self.keyboard.press('>')
-            self.keyboard.release('>')
+            # Press ,
+            self.keyboard.press(',')
+            self.keyboard.release(',')
             
             # Wait 50ms
             time.sleep(0.05)
             
-            # Press <
-            self.keyboard.press('<')
-            self.keyboard.release('<')
+            # Press .
+            self.keyboard.press('.')
+            self.keyboard.release('.')
         except Exception as e:
             print(f"Error firing center sequence: {e}")
     
